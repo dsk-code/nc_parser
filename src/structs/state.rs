@@ -72,11 +72,11 @@ impl State {
             .map_err(|e| Error::InvalidParser(format!("{:?}", e)))?;
         match (g, x, y) {
             (
-                Some((g_code, g_value)), 
+                Some(g_code), 
                 Some((x_code, x_value)), 
                 Some((y_code, y_value))
             ) => {
-                if let Some(mode) = PositioningMode::new(g_code, g_value.parse()?) {
+                if let Some(mode) = PositioningMode::new(g_code) {
                     self.incremental_set(mode);
                 };
                 self.x_set(XCoordinate::new(x_code, x_value.parse::<f32>()?)?);
@@ -85,11 +85,11 @@ impl State {
                 Ok(Some(self.clone()))
             },
             (
-                Some((g_code, g_value)), 
+                Some(g_code), 
                 Some((x_code, x_value)), 
                 None
             ) => {
-                if let Some(mode) = PositioningMode::new(g_code, g_value.parse()?) {
+                if let Some(mode) = PositioningMode::new(g_code) {
                     self.incremental_set(mode);
                 };
                 self.x_set(XCoordinate::new(x_code, x_value.parse::<f32>()?)?);
@@ -97,11 +97,11 @@ impl State {
                 Ok(Some(self.clone()))
             },
             (
-                Some((g_code, g_value)), 
+                Some(g_code), 
                 None, 
                 Some((y_code, y_value))
             ) => {
-                if let Some(mode) = PositioningMode::new(g_code, g_value.parse()?) {
+                if let Some(mode) = PositioningMode::new(g_code) {
                     self.incremental_set(mode);
                 };
                 self.y_set(YCoordinate::new(y_code, y_value.parse::<f32>()?)?);
@@ -145,12 +145,12 @@ impl State {
                 Ok(None)
             },
             (
-                Some((g_code, g_value)), 
+                Some(g_code), 
                 None, 
                 None
             ) => {
                 // インクレメンタルの値の更新のみなのでStateを返さない
-                if let Some(mode) = PositioningMode::new(g_code, g_value.parse()?) {
+                if let Some(mode) = PositioningMode::new(g_code) {
                     self.incremental_set(mode);
                 };
 
@@ -178,20 +178,20 @@ mod tests {
         let datas = [
             (
                 State { incremental: false, x: 100.0, y: -100.0 }, 
-                (('G', 90), ('X', 100.0), ('Y', -100.0)),
+                ("G90", ('X', 100.0), ('Y', -100.0)),
             ),
             (
                 State { incremental: true, x: 100.0, y: -100.0 }, 
-                (('G', 91), ('X', 100.0), ('Y', -100.0)),
+                ("G91", ('X', 100.0), ('Y', -100.0)),
             ),
         ];
         datas.iter().for_each(
             |&(
                 expected,
-                ((gcode, gvalue),(xcode, xvalue),(ycode, yvalue)),
+                (gcode,(xcode, xvalue),(ycode, yvalue)),
             )| {
                 let result = State::new(
-                    PositioningMode::new(gcode, gvalue).unwrap(), 
+                    PositioningMode::new(gcode).unwrap(), 
                     XCoordinate::new(xcode, xvalue).unwrap(), 
                     YCoordinate::new(ycode, yvalue).unwrap()
                 );
@@ -204,11 +204,11 @@ mod tests {
     fn state_incremental_set() {
         let mut expected = State { incremental: true, x: 100.0, y: -100.0 };
         let mut state = State::default();
-        state.incremental_set(PositioningMode::new('G', 91).unwrap());
+        state.incremental_set(PositioningMode::new("G91").unwrap());
         assert_eq!(state.incremental, expected.incremental);
 
         expected.incremental = false;
-        state.incremental_set(PositioningMode::new('G', 90).unwrap());
+        state.incremental_set(PositioningMode::new("G90").unwrap());
         assert_eq!(state.incremental, expected.incremental);
     }
 
@@ -358,7 +358,7 @@ mod tests {
         datas.iter().for_each(|&(line_str, expected)| {
             let line = Line::new(line_str.to_string());
             let mut state = State::new(
-                PositioningMode::new('G', 90).unwrap(), 
+                PositioningMode::new("G90").unwrap(), 
                 XCoordinate::new('X', 100.0).unwrap(), 
                 YCoordinate::new('Y', -100.0).unwrap()
             );

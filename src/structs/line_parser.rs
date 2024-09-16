@@ -1,4 +1,5 @@
-use nom::bytes::complete::take_until;
+use nom::branch::alt;
+use nom::bytes::complete::{tag, take_until};
 use nom::IResult;
 use nom::combinator::{opt, recognize};
 use nom::sequence::{tuple, preceded};
@@ -14,7 +15,7 @@ impl Line {
         Self { line }
     }
 
-    pub fn parsed_for_state(&self) -> IResult<&str, (Option<(char, &str)>, Option<(char, &str)>, Option<(char, &str)>)> {
+    pub fn parsed_for_state(&self) -> IResult<&str, (Option<&str>, Option<(char, &str)>, Option<(char, &str)>)> {
         let (_, g_value) = opt(positioning_mode)(&self.line)?;
         let (_, x_value) = opt(x)(&self.line)?;
         let (_, y_value) = opt(y)(&self.line)?;
@@ -24,20 +25,17 @@ impl Line {
 }
 
 /// Gコードに到達するまでスキップし、Gコードと値、残りの文字列を返す
-pub fn positioning_mode(input: &str) -> IResult<&str, (char, &str)> {
-    preceded(
-        take_until("G"), 
-        tuple((
-            char('G'), 
-            recognize(
-                tuple(( 
-                    digit1, 
-                    opt(char('.')), 
-                    digit0
-                ))
-            )
-        ))
-    )(input)
+pub fn positioning_mode(input: &str) -> IResult<&str, &str> {
+    alt((
+        preceded(
+            take_until("G90"), 
+            tag("G90")
+        ),
+        preceded(
+            take_until("G91"), 
+            tag("G91")
+        ),
+    ))(input)
 }
 
 /// Xコードに到達するまでスキップし、Xコードと値、残りの文字列を返す
@@ -94,15 +92,15 @@ mod tests {
         let datas = [
             (
                 "G90X100.0Y-100.0",
-                ("", (Some(('G', "90")), Some(('X', "100.0")), Some(('Y', "-100.0"))))
+                ("", (Some("G90"), Some(('X', "100.0")), Some(('Y', "-100.0"))))
             ),
             (
                 "G90X100.0",
-                ("", (Some(('G', "90")), Some(('X', "100.0")), None))
+                ("", (Some("G90"), Some(('X', "100.0")), None))
             ),
             (
-                "G90Y-100.0",
-                ("", (Some(('G', "90")), None, Some(('Y', "-100.0"))))
+                "G91Y-100.0",
+                ("", (Some("G91"), None, Some(('Y', "-100.0"))))
             ),
             (
                 "Y-100.0X100.0",
@@ -110,7 +108,7 @@ mod tests {
             ),
             (
                 "V500.0G90W700.0X100.0Z200.0Y-100.0C50.0",
-                ("", (Some(('G', "90")), Some(('X', "100.0")), Some(('Y', "-100.0"))))
+                ("", (Some("G90"), Some(('X', "100.0")), Some(('Y', "-100.0"))))
             ),
             (
                 "V500.0W700.0",
@@ -136,19 +134,19 @@ mod tests {
         let datas = [
             (
                 "G90X100.0Y-100.0",
-                ("X100.0Y-100.0", ('G', "90"))
+                ("X100.0Y-100.0", "G90")
+            ),
+            (
+                "X100.0Y-100.0G90",
+                ("", "G90")
+            ),
+            (
+                "G91X100.0Y-100.0",
+                ("X100.0Y-100.0", "G91")
             ),
             (
                 "X100.0Y-100.0G91",
-                ("", ('G', "91"))
-            ),
-            (
-                "X100.0G91.2Y-100.0",
-                ("Y-100.0", ('G', "91.2"))
-            ),
-            (
-                "X100.0G0Y-100.0",
-                ("Y-100.0", ('G', "0"))
+                ("", "G91")
             ),
         ];
         
@@ -171,20 +169,26 @@ mod tests {
                 }))
             ),
             (
-                "X100.0GY-100.0",
+                "G92X100.0Y-100.0",
                 Err(nom::Err::Error(nom::error::Error {
-                    input: "Y-100.0", 
-                    code: nom::error::ErrorKind::Digit
-                }))
-            ),
-            (
-                "X100.0g200.0Y-100.0",
-                Err(nom::Err::Error(nom::error::Error {
-                    input: "X100.0g200.0Y-100.0", 
+                    input: "G92X100.0Y-100.0", 
                     code: nom::error::ErrorKind::TakeUntil
                 }))
             ),
-            
+            (
+                "g90X100.0Y-100.0",
+                Err(nom::Err::Error(nom::error::Error {
+                    input: "g90X100.0Y-100.0", 
+                    code: nom::error::ErrorKind::TakeUntil
+                }))
+            ),
+            (
+                "g91X100.0Y-100.0",
+                Err(nom::Err::Error(nom::error::Error {
+                    input: "g91X100.0Y-100.0", 
+                    code: nom::error::ErrorKind::TakeUntil
+                }))
+            ),
         ];
         
         datas.iter().for_each(|&(input, ref expected)| {
